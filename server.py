@@ -1,6 +1,6 @@
-import os, base64
+import os, base64, json
+import urllib.request, urllib.error
 from flask import Flask, request, jsonify, send_from_directory
-import google.generativeai as genai
 
 app = Flask(__name__, static_folder="static")
 
@@ -26,38 +26,52 @@ def analizar_pdf():
     if not pdf_b64:
         return jsonify({"error": "No se recibió el PDF"}), 400
 
-    try:
-        genai.configure(api_key=GEMINI_API_KEY)
+    # Modelos gratuitos de Gemini con soporte de documentos
+    modelos = [
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-8b-latest",
+        "gemini-1.5-flash-8b",
+    ]
 
-        pdf_bytes = base64.b64decode(pdf_b64)
-
-        # Usamos el cliente unificado con el nombre de modelo correcto
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash-8b",
-            system_instruction=system
-        )
-
-        response = model.generate_content([
-            {"mime_type": "application/pdf", "data": pdf_bytes},
-            "Extrae los datos de este documento según las instrucciones."
-        ])
-
-        return jsonify({"resultado": response.text})
-
-    except Exception as e:
-        # Si falla, intentar con gemini-1.5-pro
+    ultimo_error = ""
+    for modelo in modelos:
         try:
-            model2 = genai.GenerativeModel(
-                model_name="gemini-1.5-pro",
-                system_instruction=system
-            )
-            response2 = model2.generate_content([
-                {"mime_type": "application/pdf", "data": pdf_bytes},
-                "Extrae los datos de este documento según las instrucciones."
-            ])
-            return jsonify({"resultado": response2.text})
-        except Exception as e2:
-            return jsonify({"error": str(e2)}), 500
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={GEMINI_API_KEY}"
+
+            payload = {
+                "system_instruction": {
+                    "parts": [{"text": system}]
+                },
+                "contents": [{
+                    "parts": [
+                        {
+                            "inline_data": {
+                                "mime_type": "application/pdf",
+                                "data": pdf_b64
+                            }
+                        },
+                        {"text": "Extrae los datos de este documento según las instrucciones del sistema."}
+                    ]
+                }]
+            }
+
+            body = json.dumps(payload).encode("utf-8")
+            req  = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+                texto  = result["candidates"][0]["content"]["parts"][0]["text"]
+                return jsonify({"resultado": texto})
+
+        except urllib.error.HTTPError as e:
+            ultimo_error = f"{modelo}: {e.code} {e.read().decode('utf-8')[:200]}"
+            continue
+        except Exception as e:
+            ultimo_error = f"{modelo}: {str(e)}"
+            continue
+
+    return jsonify({"error": ultimo_error}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
