@@ -14,6 +14,21 @@ def index():
 def static_files(path):
     return send_from_directory("static", path)
 
+# Endpoint de diagnóstico — lista los modelos disponibles con tu key
+@app.route("/modelos")
+def listar_modelos():
+    if not GEMINI_API_KEY:
+        return jsonify({"error": "API key no configurada"}), 500
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            nombres = [m["name"] for m in data.get("models", [])]
+            return jsonify({"modelos": nombres})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/analizar-pdf", methods=["POST"])
 def analizar_pdf():
     if not GEMINI_API_KEY:
@@ -26,7 +41,6 @@ def analizar_pdf():
     if not pdf_b64:
         return jsonify({"error": "No se recibió el PDF"}), 400
 
-    # Modelos gratuitos de Gemini con soporte de documentos
     modelos = [
         "gemini-1.5-flash-latest",
         "gemini-1.5-flash",
@@ -38,32 +52,19 @@ def analizar_pdf():
     for modelo in modelos:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={GEMINI_API_KEY}"
-
             payload = {
-                "system_instruction": {
-                    "parts": [{"text": system}]
-                },
-                "contents": [{
-                    "parts": [
-                        {
-                            "inline_data": {
-                                "mime_type": "application/pdf",
-                                "data": pdf_b64
-                            }
-                        },
-                        {"text": "Extrae los datos de este documento según las instrucciones del sistema."}
-                    ]
-                }]
+                "system_instruction": {"parts": [{"text": system}]},
+                "contents": [{"parts": [
+                    {"inline_data": {"mime_type": "application/pdf", "data": pdf_b64}},
+                    {"text": "Extrae los datos de este documento según las instrucciones del sistema."}
+                ]}]
             }
-
             body = json.dumps(payload).encode("utf-8")
             req  = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
-
             with urllib.request.urlopen(req, timeout=60) as resp:
                 result = json.loads(resp.read().decode("utf-8"))
                 texto  = result["candidates"][0]["content"]["parts"][0]["text"]
                 return jsonify({"resultado": texto})
-
         except urllib.error.HTTPError as e:
             ultimo_error = f"{modelo}: {e.code} {e.read().decode('utf-8')[:200]}"
             continue
