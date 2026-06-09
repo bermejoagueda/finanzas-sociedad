@@ -75,7 +75,7 @@ def init_db():
             id SERIAL PRIMARY KEY,
             usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
             tipo VARCHAR(10) NOT NULL,
-            desc TEXT NOT NULL,
+            descripcion TEXT NOT NULL,
             monto NUMERIC(12,2) NOT NULL,
             fecha DATE NOT NULL,
             cat VARCHAR(100),
@@ -195,11 +195,11 @@ def get_movimientos():
     cur  = conn.cursor()
     if year:
         cur.execute(
-            "SELECT * FROM movimientos WHERE usuario_id=%s AND EXTRACT(YEAR FROM fecha)=%s ORDER BY fecha DESC",
+            "SELECT id, usuario_id, tipo, descripcion as desc, monto, fecha, cat, ref, nota, origen, extra, created_at FROM movimientos WHERE usuario_id=%s AND EXTRACT(YEAR FROM fecha)=%s ORDER BY fecha DESC",
             (uid, year)
         )
     else:
-        cur.execute("SELECT * FROM movimientos WHERE usuario_id=%s ORDER BY fecha DESC", (uid,))
+        cur.execute("SELECT id, usuario_id, tipo, descripcion as desc, monto, fecha, cat, ref, nota, origen, extra, created_at FROM movimientos WHERE usuario_id=%s ORDER BY fecha DESC", (uid,))
     rows = cur.fetchall()
     cur.close(); conn.close()
     result = []
@@ -217,7 +217,7 @@ def get_movimientos():
 def create_movimiento():
     uid  = current_user_id()
     data = request.get_json()
-    required = ["tipo", "desc", "monto", "fecha"]
+    required = ["tipo", "descripcion", "monto", "fecha"]
     for f in required:
         if not data.get(f):
             return jsonify({"error": f"Campo requerido: {f}"}), 400
@@ -228,9 +228,9 @@ def create_movimiento():
     conn = get_db()
     cur  = conn.cursor()
     cur.execute("""
-        INSERT INTO movimientos (usuario_id, tipo, desc, monto, fecha, cat, ref, nota, origen, extra)
+        INSERT INTO movimientos (usuario_id, tipo, descripcion, monto, fecha, cat, ref, nota, origen, extra)
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
-    """, (uid, data["tipo"], data["desc"], data["monto"], data["fecha"],
+    """, (uid, data["tipo"], data["descripcion"], data["monto"], data["fecha"],
           data.get("cat"), data.get("ref"), data.get("nota"),
           data.get("origen","manual"), json.dumps(extra) if extra else None))
     new_id = cur.fetchone()["id"]
@@ -262,12 +262,12 @@ def export_csv():
     cur  = conn.cursor()
     if year:
         cur.execute(
-            "SELECT fecha,tipo,cat,desc,monto,ref,nota,origen FROM movimientos WHERE usuario_id=%s AND EXTRACT(YEAR FROM fecha)=%s ORDER BY fecha DESC",
+            "SELECT fecha,tipo,cat,descripcion as desc,monto,ref,nota,origen FROM movimientos WHERE usuario_id=%s AND EXTRACT(YEAR FROM fecha)=%s ORDER BY fecha DESC",
             (uid, year)
         )
     else:
         cur.execute(
-            "SELECT fecha,tipo,cat,desc,monto,ref,nota,origen FROM movimientos WHERE usuario_id=%s ORDER BY fecha DESC",
+            "SELECT fecha,tipo,cat,descripcion as desc,monto,ref,nota,origen FROM movimientos WHERE usuario_id=%s ORDER BY fecha DESC",
             (uid,)
         )
     rows = cur.fetchall()
