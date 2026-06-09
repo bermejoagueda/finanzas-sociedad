@@ -320,16 +320,27 @@ def analizar_pdf():
     return jsonify({"resultado": texto})
 
 # ── Inicialización ─────────────────────────────────────────────
-if __name__ == "__main__":
-    if DATABASE_URL:
-        init_db()
-    port = int(os.environ.get("PORT", 5050))
-    app.run(host="0.0.0.0", port=port)
-
-# Para gunicorn
-with app.app_context():
+@app.before_request
+def ensure_db():
+    app.before_request_funcs[None].remove(ensure_db)
     if DATABASE_URL:
         try:
             init_db()
         except Exception as e:
             print(f"DB init warning: {e}")
+
+@app.route("/api/admin/initdb")
+def force_initdb():
+    if not DATABASE_URL:
+        return jsonify({"error": "No DATABASE_URL"}), 500
+    try:
+        init_db()
+        return jsonify({"ok": True, "msg": "Tablas creadas correctamente"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    if DATABASE_URL:
+        init_db()
+    port = int(os.environ.get("PORT", 5050))
+    app.run(host="0.0.0.0", port=port)
