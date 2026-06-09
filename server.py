@@ -14,21 +14,6 @@ def index():
 def static_files(path):
     return send_from_directory("static", path)
 
-# Endpoint de diagnóstico — lista los modelos disponibles con tu key
-@app.route("/modelos")
-def listar_modelos():
-    if not GEMINI_API_KEY:
-        return jsonify({"error": "API key no configurada"}), 500
-    try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
-        req = urllib.request.Request(url)
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            nombres = [m["name"] for m in data.get("models", [])]
-            return jsonify({"modelos": nombres})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 @app.route("/analizar-pdf", methods=["POST"])
 def analizar_pdf():
     if not GEMINI_API_KEY:
@@ -41,12 +26,8 @@ def analizar_pdf():
     if not pdf_b64:
         return jsonify({"error": "No se recibió el PDF"}), 400
 
-    modelos = [
-        "gemini-1.5-flash-latest",
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-8b-latest",
-        "gemini-1.5-flash-8b",
-    ]
+    # Modelos confirmados disponibles, en orden de preferencia
+    modelos = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash"]
 
     ultimo_error = ""
     for modelo in modelos:
@@ -66,7 +47,7 @@ def analizar_pdf():
                 texto  = result["candidates"][0]["content"]["parts"][0]["text"]
                 return jsonify({"resultado": texto})
         except urllib.error.HTTPError as e:
-            ultimo_error = f"{modelo}: {e.code} {e.read().decode('utf-8')[:200]}"
+            ultimo_error = f"{modelo}: {e.code} {e.read().decode('utf-8')[:300]}"
             continue
         except Exception as e:
             ultimo_error = f"{modelo}: {str(e)}"
