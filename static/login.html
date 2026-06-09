@@ -102,17 +102,26 @@ async function doRegister() {
   const ok  = document.getElementById('r-ok');
   err.style.display = ok.style.display = 'none';
   if (!username || !password) { showErr(err, 'Completa todos los campos.'); return; }
+  if (password.length < 6) { showErr(err, 'La contraseña debe tener al menos 6 caracteres.'); return; }
   if (password !== password2) { showErr(err, 'Las contraseñas no coinciden.'); return; }
-  const resp = await fetch('/api/auth/register', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({username, password})
-  });
-  const data = await resp.json();
-  if (resp.ok) {
-    ok.textContent = 'Cuenta creada. Ahora accede con tus datos.';
-    ok.style.display = 'block';
-    setTimeout(() => showTab('login'), 1500);
-  } else showErr(err, data.error || 'Error al registrar.');
+  try {
+    const resp = await fetch('/api/auth/register', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({username, password})
+    });
+    let data = {};
+    try { data = await resp.json(); } catch(e) { data = {}; }
+    if (resp.ok) {
+      ok.textContent = 'Cuenta creada correctamente. Ahora accede con tus datos.';
+      ok.style.display = 'block';
+      document.getElementById('l-user').value = username;
+      setTimeout(() => showTab('login'), 1800);
+    } else {
+      showErr(err, data.error || 'Error al registrar (código '+resp.status+').');
+    }
+  } catch(e) {
+    showErr(err, 'Error de conexión: ' + e.message);
+  }
 }
 
 function showErr(el, msg) { el.textContent = msg; el.style.display = 'block'; }
